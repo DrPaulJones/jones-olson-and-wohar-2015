@@ -1,0 +1,454 @@
+CALENDAR(q) 1947:1
+ALLOCATE 0 2007:4
+OPEN DATA
+DATA(FORMAT=xlsx,org=obs)
+tab
+set positive = %if(exoger>0,exoger,0)
+set negative = %if(exoger<0,exoger,0)
+*************************************************Var***************************************
+
+
+set lngdp = 100*(log(real) - log(real{1}))
+set lcon = 100*(log(consumption) - log(consumption{1}))
+set linv = 100*(log(investment) - log(investment{1}))
+*set lim = 100*(log(im) - log(im{1}))
+*set lex = 100*(log(ex) - log(ex{1}))
+
+graph(hea='Romer and Romer (2010) Exogenous Tax Series') 1 ; # exoger
+
+
+
+@varlagselect(crit=bic,lags=12)
+# lngdp lcon
+
+compute lags=6			;*Number of lags
+compute nvar=3				;*Number of variable
+compute nstep=13			;*Number of response steps
+compute ndraws=10000		;*Number of draws
+*
+******************************************************************
+dec vect[series] udraws(nvar) resids(nvar) resample(nvar)
+dec vect[equation] eqsample(nvar) eqbase(nvar)
+
+system(model=varmodel)
+variables lngdp lcon linv
+lags 1 to lags
+det constant exoger{0 to 12}
+end(system)
+estimate(print,cvout=sigma1,resids=resids1) 1950:01 *
+
+compute nshocks=1
+compute nvar   =%nvar
+compute fxx    =%decomp(%xx)
+compute fwish  =%decomp(inv(%nobs*%sigma))
+compute wishdof=%nobs-%nreg
+compute betaols=%modelgetcoeffs(varmodel)
+*
+declare vect[rect] %%responses(ndraws)
+declare rect[series] impulses(nvar,nvar)
+
+equation(empty) EQ1 exoger
+
+infobox(action=define,progress,lower=1,upper=ndraws) "Monte Carlo Integration"
+do draw=1,ndraws
+   if %clock(draw,2)==1 {
+      compute sigmad  =%ranwisharti(fwish,wishdof)
+      compute fsigma  =%decomp(sigmad)
+      compute betau   =%ranmvkron(fsigma,fxx)
+      compute betadraw=betaols+betau
+   }
+   else
+      compute betadraw=betaols-betau
+
+   compute %modelsetcoeffs(varmodel,betadraw)
+   *
+   * Shock the combination of the VAR + the placeholder equation with a
+   * unit shock to the placeholder.
+   *
+   impulse(noprint,model=varmodel+eq1,shock=%unitv(%nvar+1,%nvar+1),result=impulses,steps=nstep)
+       set impulses(1,1) = -1*(impulses(1,1))
+	  set impulses(2,1) = -1*(impulses(2,1))
+		set impulses(3,1) = -1*(impulses(3,1))
+
+
+     acc impulses(1,1)
+     acc impulses(2,1)
+		acc impulses(3,1)
+
+
+    dim %%responses(draw)(nvar*nshocks,nstep)
+   ewise %%responses(draw)(i,j)=ix=%vec(%xt(impulses,j)),ix(i)
+   infobox(current=draw)
+end do draw
+infobox(action=remove)
+
+@mcgraphirf(model=varmodel,shocklabels=||"Romer and Romer (2010) U.S. Tax Multipliers"||,VARlabels=||"GDP","Consumption","Investment"||,stddev=1.0)
+
+
+
+dec vect[series] udraws(nvar) resids(nvar) resample(nvar)
+dec vect[equation] eqsample(nvar) eqbase(nvar)
+
+system(model=varmodel)
+variables lngdp lcon linv
+lags 1 to lags
+det constant positive{0 to 12} negative{0 to 12}
+end(system)
+estimate(print,cvout=sigma1,resids=resids1) 1950:01 *
+
+compute nshocks=1
+compute nvar   =%nvar
+compute fxx    =%decomp(%xx)
+compute fwish  =%decomp(inv(%nobs*%sigma))
+compute wishdof=%nobs-%nreg
+compute betaols=%modelgetcoeffs(varmodel)
+*
+declare vect[rect] %%responses(ndraws)
+declare rect[series] impulses(nvar,nvar)
+
+equation(empty) EQ1 negative
+
+infobox(action=define,progress,lower=1,upper=ndraws) "Monte Carlo Integration"
+do draw=1,ndraws
+   if %clock(draw,2)==1 {
+      compute sigmad  =%ranwisharti(fwish,wishdof)
+      compute fsigma  =%decomp(sigmad)
+      compute betau   =%ranmvkron(fsigma,fxx)
+      compute betadraw=betaols+betau
+   }
+   else
+      compute betadraw=betaols-betau
+
+   compute %modelsetcoeffs(varmodel,betadraw)
+   *
+   * Shock the combination of the VAR + the placeholder equation with a
+   * unit shock to the placeholder.
+   *
+   impulse(noprint,model=varmodel+eq1,shock=%unitv(%nvar+1,%nvar+1),result=impulses,steps=nstep)
+       set impulses(1,1) = -1*(impulses(1,1))
+	  set impulses(2,1) = -1*(impulses(2,1))
+		set impulses(3,1) = -1*(impulses(3,1))
+
+
+     acc impulses(1,1)
+     acc impulses(2,1)
+		acc impulses(3,1)
+
+
+    dim %%responses(draw)(nvar*nshocks,nstep)
+   ewise %%responses(draw)(i,j)=ix=%vec(%xt(impulses,j)),ix(i)
+   infobox(current=draw)
+end do draw
+infobox(action=remove)
+
+@mcgraphirf(model=varmodel,shocklabels=||"U.S. Tax Cut Multiplier"||,VARlabels=||"GDP","Consumption","Investment"||,stddev=1.0)
+
+
+
+equation(empty) EQ1 positive
+
+infobox(action=define,progress,lower=1,upper=ndraws) "Monte Carlo Integration"
+do draw=1,ndraws
+   if %clock(draw,2)==1 {
+      compute sigmad  =%ranwisharti(fwish,wishdof)
+      compute fsigma  =%decomp(sigmad)
+      compute betau   =%ranmvkron(fsigma,fxx)
+      compute betadraw=betaols+betau
+   }
+   else
+      compute betadraw=betaols-betau
+
+   compute %modelsetcoeffs(varmodel,betadraw)
+   *
+   * Shock the combination of the VAR + the placeholder equation with a
+   * unit shock to the placeholder.
+   *
+   impulse(noprint,model=varmodel+eq1,shock=%unitv(%nvar+1,%nvar+1),result=impulses,steps=nstep)
+       set impulses(1,1) = 1*(impulses(1,1))
+	  set impulses(2,1) = 1*(impulses(2,1))
+		set impulses(3,1) = 1*(impulses(3,1))
+
+
+     acc impulses(1,1)
+     acc impulses(2,1)
+		acc impulses(3,1)
+
+
+    dim %%responses(draw)(nvar*nshocks,nstep)
+   ewise %%responses(draw)(i,j)=ix=%vec(%xt(impulses,j)),ix(i)
+   infobox(current=draw)
+end do draw
+infobox(action=remove)
+
+@mcgraphirf(model=varmodel,shocklabels=||"U.S. Tax Increase Multiplier"||,VARlabels=||"GDP","Consumption","Investment"||,stddev=1.0)
+
+
+
+LINREG(print) lngdp 1950:01 * resids3
+# CONSTANT EXOGER{0 to 12} lngdp{1 to 11}
+DO H = 0,12
+      SUMMARIZE(NOPRINT)
+      # exoger{0 TO H}
+     compute max = H + 1
+     COMPUTE SERROR = %SUMLC/%CDSTAT
+     set multiplier max max = %sumlc
+     set standard max max = serror
+     DISPLAY H %SUMLC SERROR %CDSTAT
+END DO H
+print(nodate) 1 13 multiplier standard
+set se1 1 13 = multiplier + standard
+set se2 1 13 = multiplier - standard
+graph(hea='Romer and Romer (2010) Tax Multiplier',patterns) 3 ; # multiplier 1 13 1 ; # se1 1 13 2 ; # se2 1 13 2
+
+
+
+
+LINREG(print) lngdp 1950:1 * resids2
+# CONSTANT positive{0 to 12} negative{0 to 12} lngdp{1 to 11}
+disp "BIC" @25 -2.0*%logl+%nreg*log(%nobs)
+DO H = 0,12
+      SUMMARIZE(NOPRINT)
+      # positive{0 TO H}
+     compute max = H + 1
+     COMPUTE SERROR = %SUMLC/%CDSTAT
+     set multiplier1 max max = %sumlc
+     set standard1 max max = serror
+     DISPLAY H %SUMLC SERROR %CDSTAT
+END DO H
+print(nodate) 1 13 multiplier1 standard1
+set se1 1 13 = multiplier1 + standard1
+set se2 1 13 = multiplier1 - standard1
+graph(patterns) 3 ; # multiplier1 1 13 1 ; # se1 1 13 2 ; # se2 1 13 2
+
+
+DO H = 0,12
+      SUMMARIZE(NOPRINT)
+      # negative{0 TO H}
+     compute max = H + 1
+     COMPUTE SERROR = %SUMLC/%CDSTAT
+     set multiplier2 max max = %sumlc
+     set standard2 max max = serror
+     DISPLAY H %SUMLC SERROR %CDSTAT
+END DO H
+print(nodate) 1 13 multiplier2 standard2
+set se3 1 13 = -1*multiplier2 + standard2
+set se4 1 13 = -1*multiplier2 - standard2
+set multiplier3 = -1*multiplier2
+graph(patterns,nodates,number=0) 3 ; # multiplier3 1 13 1 ; # se3 1 13 2 ; # se4 1 13 2
+
+spgraph(hfields=2,vfields=1,samesize)
+graph(patterns,hea='Tax Increase',min=-4.0,max=4.0,hlabel="Quarter",vlabel="Percent",number=0) 3 ; # multiplier1 1 13 1 ; # se1 1 13 2 ; # se2 1 13 2
+graph(patterns,hea='Tax Cut',min=-4.0,max=4.0,hlabel="Quarter",vlabel="Percent",number=0) 3 ; # multiplier3 1 13 1 ; # se3 1 13 2 ; # se4 1 13 2
+spg(done)
+
+
+
+graph(klabel=||"Linear Multiplier","Tax Increase Multiplier","Tax Cut Multiplier"||,key=below,patterns,hea='Asymmetric U.S. Tax Multipliers',$
+hlabel="Quarter",vlabel="Percent",number=0,min=-6.0,max=3.0) 3 ; # multiplier 1 13 1 ; # multiplier1 1 13 2 ; # multiplier3 1 13 3
+
+
+
+*******Mertens and Ravn***********
+
+
+
+
+******************Positive and Negative*****************
+spgraph(hfields=1,vfields=2,samesize)
+graph(hea='Romer and Romer (2010) Unanticipated Tax Series') 1 ; # sut
+graph(hea='Romer and Romer (2010) Anticipated Tax Series') 1 ; # satt
+spg(done)
+
+
+
+set posut = %if(sut>0,sut,0)
+set negut = %if(sut<0,sut,0)
+
+set posat = %if(satt>0,satt,0)
+set negat = %if(satt<0,satt,0)
+
+
+
+compute lags=1			;*Number of lags
+compute nvar=3				;*Number of variable
+compute nstep=13			;*Number of response steps
+compute ndraws=10000		;*Number of draws
+*
+******************************************************************
+
+
+dec vect[series] udraws(nvar) resids(nvar) resample(nvar)
+dec vect[equation] eqsample(nvar) eqbase(nvar)
+
+system(model=varmodel)
+variables lngdp lcon linv
+lags 1 to lags
+det constant posut{0 to 12} negut{0 to 12} posat{0 to 12} negat{0 to 12}
+end(system)
+estimate(print,cvout=sigma1,resids=resids1) 1950:01 *
+
+compute nshocks=1
+compute nvar   =%nvar
+compute fxx    =%decomp(%xx)
+compute fwish  =%decomp(inv(%nobs*%sigma))
+compute wishdof=%nobs-%nreg
+compute betaols=%modelgetcoeffs(varmodel)
+*
+declare vect[rect] %%responses(ndraws)
+declare rect[series] impulses(nvar,nvar)
+
+equation(empty) EQ1 posat
+
+infobox(action=define,progress,lower=1,upper=ndraws) "Monte Carlo Integration"
+do draw=1,ndraws
+   if %clock(draw,2)==1 {
+      compute sigmad  =%ranwisharti(fwish,wishdof)
+      compute fsigma  =%decomp(sigmad)
+      compute betau   =%ranmvkron(fsigma,fxx)
+      compute betadraw=betaols+betau
+   }
+   else
+      compute betadraw=betaols-betau
+
+   compute %modelsetcoeffs(varmodel,betadraw)
+   *
+   * Shock the combination of the VAR + the placeholder equation with a
+   * unit shock to the placeholder.
+   *
+   impulse(noprint,model=varmodel+eq1,shock=%unitv(%nvar+1,%nvar+1),result=impulses,steps=nstep)
+       set impulses(1,1) = 1*(impulses(1,1))
+	  set impulses(2,1) = 1*(impulses(2,1))
+		set impulses(3,1) = 1*(impulses(3,1))
+
+
+     acc impulses(1,1)
+     acc impulses(2,1)
+		acc impulses(3,1)
+
+
+    dim %%responses(draw)(nvar*nshocks,nstep)
+   ewise %%responses(draw)(i,j)=ix=%vec(%xt(impulses,j)),ix(i)
+   infobox(current=draw)
+end do draw
+infobox(action=remove)
+
+@mcgraphirf(model=varmodel,shocklabels=||"U.S. Anticipated Tax Increase Multiplier"||,VARlabels=||"GDP","Consumption","Investment"||,stddev=1.0)
+
+
+
+equation(empty) EQ1 negat
+
+infobox(action=define,progress,lower=1,upper=ndraws) "Monte Carlo Integration"
+do draw=1,ndraws
+   if %clock(draw,2)==1 {
+      compute sigmad  =%ranwisharti(fwish,wishdof)
+      compute fsigma  =%decomp(sigmad)
+      compute betau   =%ranmvkron(fsigma,fxx)
+      compute betadraw=betaols+betau
+   }
+   else
+      compute betadraw=betaols-betau
+
+   compute %modelsetcoeffs(varmodel,betadraw)
+   *
+   * Shock the combination of the VAR + the placeholder equation with a
+   * unit shock to the placeholder.
+   *
+   impulse(noprint,model=varmodel+eq1,shock=%unitv(%nvar+1,%nvar+1),result=impulses,steps=nstep)
+       set impulses(1,1) = -1*(impulses(1,1))
+	  set impulses(2,1) = -1*(impulses(2,1))
+		set impulses(3,1) = -1*(impulses(3,1))
+
+
+     acc impulses(1,1)
+     acc impulses(2,1)
+		acc impulses(3,1)
+
+
+    dim %%responses(draw)(nvar*nshocks,nstep)
+   ewise %%responses(draw)(i,j)=ix=%vec(%xt(impulses,j)),ix(i)
+   infobox(current=draw)
+end do draw
+infobox(action=remove)
+
+@mcgraphirf(model=varmodel,shocklabels=||"U.S. Anticipated Tax Cut Multiplier"||,VARlabels=||"GDP","Consumption","Investment"||,stddev=1.0)
+
+
+equation(empty) EQ1 posut
+
+infobox(action=define,progress,lower=1,upper=ndraws) "Monte Carlo Integration"
+do draw=1,ndraws
+   if %clock(draw,2)==1 {
+      compute sigmad  =%ranwisharti(fwish,wishdof)
+      compute fsigma  =%decomp(sigmad)
+      compute betau   =%ranmvkron(fsigma,fxx)
+      compute betadraw=betaols+betau
+   }
+   else
+      compute betadraw=betaols-betau
+
+   compute %modelsetcoeffs(varmodel,betadraw)
+   *
+   * Shock the combination of the VAR + the placeholder equation with a
+   * unit shock to the placeholder.
+   *
+   impulse(noprint,model=varmodel+eq1,shock=%unitv(%nvar+1,%nvar+1),result=impulses,steps=nstep)
+       set impulses(1,1) = 1*(impulses(1,1))
+	  set impulses(2,1) = 1*(impulses(2,1))
+		set impulses(3,1) = 1*(impulses(3,1))
+
+
+     acc impulses(1,1)
+     acc impulses(2,1)
+		acc impulses(3,1)
+
+
+    dim %%responses(draw)(nvar*nshocks,nstep)
+   ewise %%responses(draw)(i,j)=ix=%vec(%xt(impulses,j)),ix(i)
+   infobox(current=draw)
+end do draw
+infobox(action=remove)
+
+@mcgraphirf(model=varmodel,shocklabels=||"U.S. Unanticipated Tax Increase Multiplier"||,VARlabels=||"GDP","Consumption","Investment"||,stddev=1.0)
+
+
+equation(empty) EQ1 negut
+
+infobox(action=define,progress,lower=1,upper=ndraws) "Monte Carlo Integration"
+do draw=1,ndraws
+   if %clock(draw,2)==1 {
+      compute sigmad  =%ranwisharti(fwish,wishdof)
+      compute fsigma  =%decomp(sigmad)
+      compute betau   =%ranmvkron(fsigma,fxx)
+      compute betadraw=betaols+betau
+   }
+   else
+      compute betadraw=betaols-betau
+
+   compute %modelsetcoeffs(varmodel,betadraw)
+   *
+   * Shock the combination of the VAR + the placeholder equation with a
+   * unit shock to the placeholder.
+   *
+   impulse(noprint,model=varmodel+eq1,shock=%unitv(%nvar+1,%nvar+1),result=impulses,steps=nstep)
+       set impulses(1,1) = -1*(impulses(1,1))
+	  set impulses(2,1) = -1*(impulses(2,1))
+		set impulses(3,1) = -1*(impulses(3,1))
+
+
+     acc impulses(1,1)
+     acc impulses(2,1)
+		acc impulses(3,1)
+
+
+    dim %%responses(draw)(nvar*nshocks,nstep)
+   ewise %%responses(draw)(i,j)=ix=%vec(%xt(impulses,j)),ix(i)
+   infobox(current=draw)
+end do draw
+infobox(action=remove)
+
+@mcgraphirf(model=varmodel,shocklabels=||"U.S. Unanticipated Tax Cut Multiplier"||,VARlabels=||"GDP","Consumption","Investment"||,stddev=1.0)
+
+
+
+
